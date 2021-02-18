@@ -1,0 +1,6 @@
+[submodule "jupyterlab"]
+	path = jupyterlab
+	url = https://github.com/jupyterlab/jupyterlab.git
+[submodule "jupyterlab_server"]
+	path = jupyterlab_server
+	url = https://github.com/jupyterlab/jupyterlab_server
