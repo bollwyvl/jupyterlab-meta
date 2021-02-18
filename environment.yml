@@ -1,0 +1,39 @@
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # runtimes
+  - python >=3.8,<3.9.0a0
+  - nodejs >=14,<15.0.0a0
+  # setup deps
+  - pip
+  - twine
+  - jupyter-packaging
+  - wheel
+  - packaging
+  # lab deps
+  - tornado >=6.1
+  - jinja2 >=2.10
+  - nbclassic >=0.2,<1
+  - ipython
+  # server deps
+  - pytz
+  - babel
+  - json5
+  - jsonschema >=3.0.1
+  - jupyter_server >=1.1,<2
+  # test
+  - pytest
+  - pytest-check-links
+  - requests-cache
+  - pytest-console-scripts
+  # TODO: pr for p-c-s
+  - pytest-runner
+  - strict-rfc3339
+  - codecov
+  - ipykernel
+  # docs
+  - recommonmark
+  - sphinx
+  - sphinx_rtd_theme
+  - sphinx-copybutton
