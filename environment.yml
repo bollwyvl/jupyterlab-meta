@@ -21,11 +21,13 @@ dependencies:
   - babel
   - json5
   - jsonschema >=3.0.1
-  - jupyter_server >=1.1,<2
+  - jupyter_server >=1.4,<2
   # test
   - pytest
   - pytest-check-links
+  - pytest-cov
   - requests-cache
+  - pytest-tornasync
   - pytest-console-scripts
   # TODO: pr for p-c-s
   - pytest-runner
