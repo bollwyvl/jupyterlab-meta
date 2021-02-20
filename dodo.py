@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import subprocess
+import json
 
 import doit.tools
 
@@ -20,7 +21,7 @@ DOIT_CONFIG = {
 
 
 def task_binder():
-    return dict(actions=[["echo", "ok"]])
+    return dict(task_dep=["setup"], actions=[["echo", "ready to start lab!"]])
 
 
 def task_env():
@@ -34,29 +35,68 @@ def task_env():
 
 def task_setup():
     yield dict(
+        name="yarn",
+        file_dep=[P.ENV_HISTORY, *L.PACKAGES_JSON],
+        actions=[
+            doit.tools.CmdAction([*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False)
+        ],
+        targets=[L.YARN_INTEGRITY]
+    )
+
+    yield dict(
+        name="pip:server",
         file_dep=[P.ENV_HISTORY],
-        name="server",
         actions=[doit.tools.CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False)],
     )
 
     yield dict(
-        task_dep=["setup:server"],
+        name="pip:lab",
+        task_dep=["setup:pip:server", "setup:yarn"],
         file_dep=[P.ENV_HISTORY],
-        name="lab",
         actions=[doit.tools.CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False)],
     )
 
     yield dict(
-        name="check",
-        task_dep=["setup:lab", "setup:server"],
+        name="pip:check",
+        task_dep=["setup:pip:lab", "setup:pip:server"],
         actions=[[*P.PIP, "check"]],
+    )
+
+
+def task_build():
+    yield dict(
+        name="lib",
+        task_dep=["setup:pip:lab"],
+        file_dep=[L.YARN_INTEGRITY],
+        actions=[
+            doit.tools.CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)
+        ],
+        # targets=[???]
+    )
+
+    yield dict(
+        name="core",
+        task_dep=["build:lib"],
+        actions=[
+            doit.tools.CmdAction([*P.YARN, "build:core"], cwd=L.ROOT, shell=False)
+        ],
+        # targets=[???]
+    )
+
+    yield dict(
+        name="dev:prod",
+        task_dep=["build:core"],
+        actions=[
+            doit.tools.CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False)
+        ],
+        # targets=[???]
     )
 
 
 def task_test():
     yield dict(
         name="server",
-        task_dep=["setup"],
+        task_dep=["setup:pip:check"],
         actions=[
             [
                 *P.PYM,
@@ -73,8 +113,16 @@ def task_test():
 def task_dev_mode():
     """run JupyterLab under dev_mode"""
 
+    return dict(
+        uptodate=[lambda: False],
+        task_dep=["build:dev:prod"],
+        actions=[_make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/"])],
+    )
+
+
+def _make_lab(extra_args=None):
     def lab():
-        args = [*L.BASE_ARGS, "--dev-mode", "--ServerApp.base_url", "/dev-mode/"]
+        args = [*L.BASE_ARGS, *(extra_args or [])]
         proc = subprocess.Popen(list(map(str, args)), stdin=subprocess.PIPE)
 
         try:
@@ -85,30 +133,40 @@ def task_dev_mode():
 
         proc.wait()
         return True
-
-    return dict(
-        uptodate=[lambda: False],
-        task_dep=["setup"],
-        actions=[doit.tools.PythonInteractiveAction(lab)],
-    )
+    return doit.tools.PythonInteractiveAction(lab)
 
 
 class P:
     DODO = Path(__file__)
     HERE = DODO.parent
+    BINDER = bool(json.loads(os.environ.get("LAB_LICENSES_BINDER", "0")))
     ENV_YAML = HERE / "environment.yml"
     ENV = HERE / ".env"
     ENV_HISTORY = ENV / "conda-meta/history"
-    RUN_IN = ["conda", "run", "--no-capture-output", "--prefix", ENV]
+    if BINDER:
+        RUN_IN = []
+    else:
+        RUN_IN = ["conda", "run", "--no-capture-output", "--prefix", ENV]
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
-    SETUP_E = [*PIP, "install", "-e", ".", "--no-deps", "--ignore-installed"]
+    SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
+    YARN = [*RUN_IN, "yarn"]
 
 
 class L:
     ROOT = P.HERE / "jupyterlab"
     BASE_ARGS = [*P.PYM, "jupyter", "lab", "--debug", "--no-browser", "--autoreload"]
-
+    YARN_INTEGRITY = ROOT / "node_modules/.yarn-integrity"
+    PACKAGES = ROOT / "packages"
+    BUILDER = ROOT / "builder"
+    TESTUTILS = ROOT / "testutils"
+    DEV_MODE = ROOT / "dev_mode"
+    PACKAGES_JSON = [
+        *PACKAGES.glob("*/package.json"),
+        BUILDER / "package.json",
+        ROOT / "package.json",
+        TESTUTILS / "package.json"
+    ]
 
 class S:
     ROOT = P.HERE / "jupyterlab_server"

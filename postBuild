@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
+LAB_LICENSES_BINDER=1
 doit
