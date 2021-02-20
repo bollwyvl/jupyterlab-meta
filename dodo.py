@@ -38,9 +38,11 @@ def task_setup():
         name="yarn",
         file_dep=[P.ENV_HISTORY, *L.PACKAGES_JSON],
         actions=[
-            doit.tools.CmdAction([*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False)
+            doit.tools.CmdAction(
+                [*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False
+            )
         ],
-        targets=[L.YARN_INTEGRITY]
+        targets=[L.YARN_INTEGRITY],
     )
 
     yield dict(
@@ -63,14 +65,30 @@ def task_setup():
     )
 
 
+def task_lint():
+    yield dict(
+        name="js",
+        task_dep=["setup:pip:lab"],
+        file_dep=[L.YARN_INTEGRITY],
+        actions=[doit.tools.CmdAction([*P.YARN, "lint"], cwd=L.ROOT, shell=False)],
+        # targets=[???]
+    )
+
+    lint_py = [P.DODO, S.ROOT / "jupyterlab_server/licenses_handler.py"]
+
+    yield dict(
+        name="py",
+        file_dep=[P.ENV_HISTORY, *lint_py],
+        actions=[[*P.RUN_IN, "black", *lint_py], [*P.RUN_IN, "flake8", *lint_py]],
+    )
+
+
 def task_build():
     yield dict(
         name="lib",
-        task_dep=["setup:pip:lab"],
+        task_dep=["lint:js"],
         file_dep=[L.YARN_INTEGRITY],
-        actions=[
-            doit.tools.CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)
-        ],
+        actions=[doit.tools.CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
 
@@ -133,6 +151,7 @@ def _make_lab(extra_args=None):
 
         proc.wait()
         return True
+
     return doit.tools.PythonInteractiveAction(lab)
 
 
@@ -165,8 +184,9 @@ class L:
         *PACKAGES.glob("*/package.json"),
         BUILDER / "package.json",
         ROOT / "package.json",
-        TESTUTILS / "package.json"
+        TESTUTILS / "package.json",
     ]
+
 
 class S:
     ROOT = P.HERE / "jupyterlab_server"
