@@ -138,6 +138,18 @@ def task_dev_mode():
     )
 
 
+def task_dev_mode_watch():
+    """run JupyterLab under dev_mode and watch sources"""
+
+    return dict(
+        uptodate=[lambda: False],
+        task_dep=["build:dev:prod"],
+        actions=[
+            _make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/", "--watch"])
+        ],
+    )
+
+
 def _make_lab(extra_args=None):
     def lab():
         args = [*L.BASE_ARGS, *(extra_args or [])]
