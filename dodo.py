@@ -74,7 +74,11 @@ def task_lint():
         # targets=[???]
     )
 
-    lint_py = [P.DODO, S.ROOT / "jupyterlab_server/licenses_handler.py"]
+    lint_py = [
+        P.DODO,
+        S.ROOT / "jupyterlab_server/licenses_handler.py",
+        S.ROOT / "jupyterlab_server/tests/test_licenses_api.py",
+    ]
 
     yield dict(
         name="py",
@@ -119,10 +123,15 @@ def task_test():
             [
                 *P.PYM,
                 "pytest",
+                "-x",
+                "--ff",
                 "--pyargs",
                 "jupyterlab_server",
                 "--cov",
-                "jupyterlab_server",
+                "jupyterlab_server.licenses_handler",
+                "--no-cov-on-fail",
+                "--cov-report",
+                "term-missing:skip-covered",
             ]
         ],
     )
