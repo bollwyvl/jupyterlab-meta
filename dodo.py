@@ -77,6 +77,7 @@ def task_lint():
     lint_py = [
         P.DODO,
         S.ROOT / "jupyterlab_server/licenses_handler.py",
+        S.ROOT / "jupyterlab_server/licenses_app.py",
         S.ROOT / "jupyterlab_server/tests/test_licenses_api.py",
     ]
 
@@ -125,10 +126,12 @@ def task_test():
                 "pytest",
                 "-x",
                 "--ff",
+                "-k",
+                "license",
                 "--pyargs",
                 "jupyterlab_server",
                 "--cov",
-                "jupyterlab_server.licenses_handler",
+                "jupyterlab_server",
                 "--no-cov-on-fail",
                 "--cov-report",
                 "term-missing:skip-covered",
