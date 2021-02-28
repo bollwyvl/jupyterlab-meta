@@ -126,8 +126,6 @@ def task_test():
                 "pytest",
                 "-x",
                 "--ff",
-                "-k",
-                "license",
                 "--pyargs",
                 "jupyterlab_server",
                 "--cov",
