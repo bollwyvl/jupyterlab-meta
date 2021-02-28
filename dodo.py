@@ -1,9 +1,11 @@
-import os
 from pathlib import Path
 import subprocess
 import json
+import shutil
+import os
 
 import doit.tools
+from doit.tools import CmdAction
 
 os.environ.update(
     NODE_OPTS="--max-old-space-size=4096",
@@ -21,7 +23,15 @@ DOIT_CONFIG = {
 
 
 def task_binder():
-    return dict(task_dep=["setup"], actions=[["echo", "ready to start lab!"]])
+    return dict(
+        task_dep=["build:dev:prod", "test"],
+        actions=[
+            [lambda: shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None],
+            [lambda: P.APP_DIR.mkdir(parents=True)],
+            [lambda: shutil.copytree(L.DEV_STATIC, P.APP_STATIC)],
+            ["echo", "ready to start lab!"],
+        ],
+    )
 
 
 def task_env():
@@ -37,25 +47,21 @@ def task_setup():
     yield dict(
         name="yarn",
         file_dep=[P.ENV_HISTORY, *L.PACKAGES_JSON],
-        actions=[
-            doit.tools.CmdAction(
-                [*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False
-            )
-        ],
+        actions=[CmdAction([*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False)],
         targets=[L.YARN_INTEGRITY],
     )
 
     yield dict(
         name="pip:server",
         file_dep=[P.ENV_HISTORY],
-        actions=[doit.tools.CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False)],
+        actions=[CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False)],
     )
 
     yield dict(
         name="pip:lab",
         task_dep=["setup:pip:server", "setup:yarn"],
         file_dep=[P.ENV_HISTORY],
-        actions=[doit.tools.CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False)],
+        actions=[CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False)],
     )
 
     yield dict(
@@ -70,7 +76,7 @@ def task_lint():
         name="js",
         task_dep=["setup:pip:lab"],
         file_dep=[L.YARN_INTEGRITY],
-        actions=[doit.tools.CmdAction([*P.YARN, "lint"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*P.YARN, "lint"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
 
@@ -93,25 +99,21 @@ def task_build():
         name="lib",
         task_dep=["lint:js"],
         file_dep=[L.YARN_INTEGRITY],
-        actions=[doit.tools.CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
 
     yield dict(
         name="core",
         task_dep=["build:lib"],
-        actions=[
-            doit.tools.CmdAction([*P.YARN, "build:core"], cwd=L.ROOT, shell=False)
-        ],
+        actions=[CmdAction([*P.YARN, "build:core"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
 
     yield dict(
         name="dev:prod",
         task_dep=["build:core"],
-        actions=[
-            doit.tools.CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False)
-        ],
+        actions=[CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False)],
         # targets=[???]
     )
 
@@ -160,6 +162,90 @@ def task_dev_mode_watch():
     )
 
 
+def task_clean_all():
+    """ensure every darned thing is cleaned"""
+    yarn_path = Path(os.path.expanduser("~/.yarn"))
+
+    return dict(
+        uptodate=[lambda: False],
+        actions=[
+            CmdAction(["git", "clean", "-dxf"], cwd=str(L.ROOT), shell=False),
+            CmdAction(["git", "clean", "-dxf"], cwd=str(S.ROOT), shell=False),
+            lambda: [shutil.rmtree(yarn_path) if yarn_path.exists() else None, None][
+                -1
+            ],
+            lambda: [shutil.rmtree(P.ENV) if P.ENV.exists() else None, None][-1],
+        ],
+    )
+
+
+def task_patched_prod():
+    """manually ensure the build in $PREFIX/share uses the up-to-date builder
+
+    this doesn't actually quite work yet because of release stuff
+    """
+
+    tpl_json = P.APP_STATIC / "third-party-licenses.json"
+
+    yield dict(
+        name="builder:tsinfo",
+        task_dep=["build"],
+        file_dep=[
+            *L.BUILDER.glob("*.json"),
+            *(L.BUILDER / "src").rglob("*.ts"),
+        ],
+        actions=[
+            CmdAction([*P.YARN, "build"], cwd=str(L.BUILDER), shell=False),
+        ],
+        targets=[L.BUILDER_TSBULDINFO],
+    )
+
+    yield dict(
+        name="builder:tgz",
+        actions=[
+            CmdAction([*P.NPM, "pack", "."], cwd=str(L.BUILDER), shell=False),
+        ],
+        file_dep=[L.BUILDER_TSBULDINFO],
+        targets=[L.BUILDER_TGZ],
+    )
+
+    build_args = [*P.PYM, "jupyter", "lab", "build", "--debug", "--minimize=False"]
+
+    yield dict(
+        name="lab:clean",
+        file_dep=[L.BUILDER_TGZ],
+        actions=[
+            lambda: [shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None, None][
+                -1
+            ],
+            lambda: [subprocess.call(list(map(str, build_args))), None][-1],
+        ],
+        targets=[P.APP_STAGING / "package.json"],
+    )
+
+    yield dict(
+        name="lab:build",
+        actions=[
+            CmdAction([*P.YARN, "cache", "clean"], cwd=str(P.APP_STAGING), shell=False),
+            CmdAction(
+                [*P.YARN, "add", "--dev", L.BUILDER_TGZ],
+                cwd=str(P.APP_STAGING),
+                shell=False,
+            ),
+            CmdAction([*P.YARN, "build:prod"], cwd=str(P.APP_STAGING), shell=False),
+        ],
+        file_dep=[L.BUILDER_TGZ, P.APP_STAGING / "package.json"],
+        targets=[tpl_json],
+    )
+
+    yield dict(
+        name="lab:run",
+        uptodate=[lambda: False],
+        file_dep=[tpl_json],
+        actions=[_make_lab(["--ServerApp.base_url", "/patched-prod/"])],
+    )
+
+
 def _make_lab(extra_args=None):
     def lab():
         args = [*L.BASE_ARGS, *(extra_args or [])]
@@ -184,6 +270,9 @@ class P:
     ENV_YAML = HERE / "environment.yml"
     ENV = HERE / ".env"
     ENV_HISTORY = ENV / "conda-meta/history"
+    APP_DIR = ENV / "share/jupyter/lab"
+    APP_STAGING = APP_DIR / "staging"
+    APP_STATIC = APP_DIR / "static"
     if BINDER:
         RUN_IN = []
     else:
@@ -192,6 +281,7 @@ class P:
     PIP = [*PYM, "pip"]
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
     YARN = [*RUN_IN, "yarn"]
+    NPM = [*RUN_IN, "npm"]
 
 
 class L:
@@ -200,6 +290,8 @@ class L:
     YARN_INTEGRITY = ROOT / "node_modules/.yarn-integrity"
     PACKAGES = ROOT / "packages"
     BUILDER = ROOT / "builder"
+    BUILDER_TSBULDINFO = BUILDER / "tsconfig.tsbuildinfo"
+    BUILDER_TGZ = BUILDER / "jupyterlab-builder-3.1.0-alpha.3.tgz"
     TESTUTILS = ROOT / "testutils"
     DEV_MODE = ROOT / "dev_mode"
     PACKAGES_JSON = [
