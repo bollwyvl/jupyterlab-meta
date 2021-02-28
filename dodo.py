@@ -23,8 +23,9 @@ DOIT_CONFIG = {
 
 
 def task_binder():
+    """get ready to run on binder"""
     return dict(
-        task_dep=["build:dev:prod", "test"],
+        task_dep=["build:dev:prod"],
         actions=[
             [lambda: shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None],
             [lambda: P.APP_DIR.mkdir(parents=True)],

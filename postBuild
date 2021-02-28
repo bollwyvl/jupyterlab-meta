@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 LAB_LICENSES_BINDER=1
-doit -n8 binder
+doit list --all --status
+doit binder
+doit list --all --status
