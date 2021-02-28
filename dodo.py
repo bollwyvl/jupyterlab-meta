@@ -94,6 +94,16 @@ def task_lint():
         actions=[[*P.RUN_IN, "black", *lint_py], [*P.RUN_IN, "flake8", *lint_py]],
     )
 
+    prettier = [P.HERE / "README.md"]
+
+    yield dict(
+        name="prettier",
+        file_dep=[L.YARN_INTEGRITY],
+        actions=[
+            [*L.PRETTIER, *prettier, "--write", "--prose-wrap=always", "--print-width=88"]
+        ],
+    )
+
 
 def task_build():
     yield dict(
@@ -288,7 +298,9 @@ class P:
 class L:
     ROOT = P.HERE / "jupyterlab"
     BASE_ARGS = [*P.PYM, "jupyter", "lab", "--debug", "--no-browser", "--autoreload"]
-    YARN_INTEGRITY = ROOT / "node_modules/.yarn-integrity"
+    NODE_MODULES = ROOT / "node_modules"
+    YARN_INTEGRITY = NODE_MODULES / ".yarn-integrity"
+    PRETTIER = [*P.RUN_IN, "node", NODE_MODULES / ".bin/prettier"]
     PACKAGES = ROOT / "packages"
     BUILDER = ROOT / "builder"
     BUILDER_TSBULDINFO = BUILDER / "tsconfig.tsbuildinfo"
