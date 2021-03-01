@@ -3,6 +3,7 @@ import subprocess
 import json
 import shutil
 import os
+import sys
 
 import doit.tools
 from doit.tools import CmdAction
@@ -46,12 +47,14 @@ def task_binder():
 
 
 def task_env():
-    yield dict(
-        name="update",
-        file_dep=[P.ENV_YAML],
-        actions=[["mamba", "env", "update", "-p", P.ENV, "--file", P.ENV_YAML]],
-        targets=[P.ENV_HISTORY],
-    )
+    """ensure the environment (if not already done so by binder)"""
+    if not P.BINDER:
+        yield dict(
+            name="update",
+            file_dep=[P.ENV_YAML],
+            actions=[["mamba", "env", "update", "-p", P.ENV, "--file", P.ENV_YAML]],
+            targets=[P.ENV_HISTORY],
+        )
 
 
 def task_setup():
@@ -277,9 +280,17 @@ def _make_lab(extra_args=None):
 class P:
     DODO = Path(__file__)
     HERE = DODO.parent
+
     BINDER = bool(json.loads(os.environ.get("LAB_LICENSES_BINDER", "0")))
+
+    if BINDER:
+        ENV = Path(sys.prefix)
+        RUN_IN = []
+    else:
+        ENV = HERE / ".env"
+        RUN_IN = ["conda", "run", "--no-capture-output", "--prefix", ENV]
+
     ENV_YAML = HERE / "environment.yml"
-    ENV = HERE / ".env"
     BUILD = HERE / "build"
     ENV_HISTORY = ENV / "conda-meta/history"
     APP_DIR = ENV / "share/jupyter/lab"
@@ -288,10 +299,6 @@ class P:
     APP_STATIC_PACKAGE = APP_STATIC / "package.json"
     APP_STATIC_INDEX = APP_STATIC / "index.html"
     APP_STATIC_LICENSES = APP_STATIC / "third-party-licenses.json"
-    if BINDER:
-        RUN_IN = []
-    else:
-        RUN_IN = ["conda", "run", "--no-capture-output", "--prefix", ENV]
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
