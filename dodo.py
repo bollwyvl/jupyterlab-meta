@@ -63,30 +63,26 @@ def task_setup():
     )
 
     yield dict(
-        name="pip:server",
+        name="pip",
         file_dep=[P.ENV_HISTORY],
-        actions=[CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False)],
-    )
-
-    yield dict(
-        name="pip:lab",
-        task_dep=["setup:pip:server", "setup:yarn"],
-        file_dep=[P.ENV_HISTORY],
-        actions=[CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False)],
-    )
-
-    yield dict(
-        name="pip:check",
-        task_dep=["setup:pip:lab", "setup:pip:server"],
-        actions=[[*P.PIP, "check"]],
+        actions=[
+            lambda: [P.PIP_CHECKED.unlink() if P.PIP_CHECKED.exists() else None, None][
+                -1
+            ],
+            CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False),
+            CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False),
+            [*P.PIP, "check"],
+            (doit.tools.create_folder, [P.BUILD]),
+            P.PIP_CHECKED.touch,
+        ],
+        targets=[P.PIP_CHECKED],
     )
 
 
 def task_lint():
     yield dict(
         name="js",
-        task_dep=["setup:pip:lab"],
-        file_dep=[L.YARN_INTEGRITY],
+        file_dep=[L.YARN_INTEGRITY, P.PIP_CHECKED],
         actions=[CmdAction([*P.YARN, "lint"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
@@ -160,7 +156,7 @@ def task_integrity():
 def task_build():
     yield dict(
         name="lib",
-        file_dep=[L.INTEGRITY_OK, L.YARN_INTEGRITY, *L.ALL_TS_SRC],
+        file_dep=[L.INTEGRITY_OK, L.YARN_INTEGRITY, *L.ALL_TS_SRC, P.PIP_CHECKED],
         actions=[CmdAction([*P.YARN, "build:packages"], cwd=L.ROOT, shell=False)],
         targets=[L.META_TSBUILDINFO],
     )
@@ -185,7 +181,7 @@ def task_build():
 def task_test():
     yield dict(
         name="server",
-        task_dep=["setup:pip:check"],
+        file_dep=[P.PIP_CHECKED],
         actions=[
             [
                 *P.PYM,
@@ -209,7 +205,7 @@ def task_dev_mode():
 
     return dict(
         uptodate=[lambda: False],
-        task_dep=["build:dev:prod"],
+        file_dep=[L.DEV_STATIC_PACKAGE],
         actions=[_make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/"])],
     )
 
@@ -219,7 +215,7 @@ def task_dev_mode_watch():
 
     return dict(
         uptodate=[lambda: False],
-        task_dep=["build:dev:prod"],
+        file_dep=[L.DEV_STATIC_PACKAGE],
         actions=[
             _make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/", "--watch"])
         ],
@@ -228,17 +224,20 @@ def task_dev_mode_watch():
 
 def task_clean_all():
     """ensure every darned thing is cleaned"""
-    yarn_path = Path(os.path.expanduser("~/.yarn"))
+
+    def clean_dir(path):
+        if path.exists():
+            shutil.rmtree(path)
 
     return dict(
         uptodate=[lambda: False],
         actions=[
             CmdAction(["git", "clean", "-dxf"], cwd=str(L.ROOT), shell=False),
             CmdAction(["git", "clean", "-dxf"], cwd=str(S.ROOT), shell=False),
-            lambda: [shutil.rmtree(yarn_path) if yarn_path.exists() else None, None][
-                -1
+            *[
+                (clean_dir, [d])
+                for d in [Path(os.path.expanduser("~/.yarn")), P.ENV, P.BUILD]
             ],
-            lambda: [shutil.rmtree(P.ENV) if P.ENV.exists() else None, None][-1],
         ],
     )
 
@@ -281,6 +280,7 @@ class P:
     BINDER = bool(json.loads(os.environ.get("LAB_LICENSES_BINDER", "0")))
     ENV_YAML = HERE / "environment.yml"
     ENV = HERE / ".env"
+    BUILD = HERE / "build"
     ENV_HISTORY = ENV / "conda-meta/history"
     APP_DIR = ENV / "share/jupyter/lab"
     APP_STAGING = APP_DIR / "staging"
@@ -297,6 +297,7 @@ class P:
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
     YARN = [*RUN_IN, "yarn"]
     NPM = [*RUN_IN, "npm"]
+    PIP_CHECKED = BUILD / "pip.checked"
 
 
 class L:
