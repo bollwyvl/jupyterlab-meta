@@ -33,7 +33,11 @@ def task_binder():
         shutil.copytree(L.DEV_MODE / subdir, P.APP_DIR / subdir)
 
     return dict(
-        file_dep=[L.DEV_STATIC_PACKAGE, L.DEV_STATIC_LICENSES],
+        file_dep=[
+            L.DEV_STATIC_PACKAGE,
+            L.DEV_STATIC_LICENSES,
+            P.SERVER_EXTENDED,
+        ],
         actions=[
             lambda: [shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None, None][
                 -1
