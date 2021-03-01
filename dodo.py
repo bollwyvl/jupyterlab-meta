@@ -78,11 +78,43 @@ def task_setup():
             [*P.PIP, "uninstall", "-y", "jupyterlab", "jupyterlab_server"],
             CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False),
             CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False),
+            [*P.PIP, "freeze"],
             [*P.PIP, "check"],
             (doit.tools.create_folder, [P.BUILD]),
             P.PIP_CHECKED.touch,
         ],
         targets=[P.PIP_CHECKED],
+    )
+
+    yield dict(
+        name="serverextension",
+        file_dep=[P.PIP_CHECKED],
+        actions=[
+            lambda: [
+                P.SERVER_EXTENDED.unlink() if P.SERVER_EXTENDED.exists() else None,
+                None,
+            ][-1],
+            *sum(
+                [
+                    [
+                        [
+                            *P.PYM,
+                            "jupyter",
+                            *app,
+                            "enable",
+                            "--py",
+                            "--sys-prefix",
+                            "jupyterlab",
+                        ],
+                        [*P.PYM, "jupyter", *app, "list"],
+                    ]
+                    for app in [["serverextension"], ["server", "extension"]]
+                ],
+                [],
+            ),
+            P.SERVER_EXTENDED.touch,
+        ],
+        targets=[P.SERVER_EXTENDED]
     )
 
 
@@ -212,7 +244,7 @@ def task_dev_mode():
 
     return dict(
         uptodate=[lambda: False],
-        file_dep=[L.DEV_STATIC_PACKAGE],
+        file_dep=[P.SERVER_EXTENDED, L.DEV_STATIC_PACKAGE],
         actions=[_make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/"])],
     )
 
@@ -222,7 +254,7 @@ def task_dev_mode_watch():
 
     return dict(
         uptodate=[lambda: False],
-        file_dep=[L.DEV_STATIC_PACKAGE],
+        file_dep=[P.SERVER_EXTENDED, L.DEV_STATIC_PACKAGE],
         actions=[
             _make_lab(["--dev-mode", "--ServerApp.base_url", "/dev-mode/", "--watch"])
         ],
@@ -253,9 +285,10 @@ def task_lab():
     """start lab with dev_mode prod assets copied into $PREFIX/share"""
 
     yield dict(
-        name="lab:run",
+        name="run",
         uptodate=[lambda: False],
         file_dep=[
+            P.SERVER_EXTENDED,
             P.APP_STATIC_PACKAGE,
             P.APP_STATIC_INDEX,
             P.APP_STATIC_LICENSES,
@@ -309,6 +342,7 @@ class P:
     YARN = [*RUN_IN, "yarn"]
     NPM = [*RUN_IN, "npm"]
     PIP_CHECKED = BUILD / "pip.checked"
+    SERVER_EXTENDED = BUILD / "server.extended"
 
 
 class L:
