@@ -70,7 +70,7 @@ def task_setup():
 
     yield dict(
         name="pip",
-        file_dep=[P.ENV_HISTORY],
+        file_dep=[P.ENV_HISTORY, *L.SETUP_FILES, *S.SETUP_FILES],
         actions=[
             lambda: [P.PIP_CHECKED.unlink() if P.PIP_CHECKED.exists() else None, None][
                 -1
@@ -114,7 +114,7 @@ def task_setup():
             ),
             P.SERVER_EXTENDED.touch,
         ],
-        targets=[P.SERVER_EXTENDED]
+        targets=[P.SERVER_EXTENDED],
     )
 
 
@@ -347,6 +347,7 @@ class P:
 
 class L:
     ROOT = P.HERE / "jupyterlab"
+    SETUP_FILES = [ROOT / "setup.py", ROOT / "pyproject.toml"]
     BASE_ARGS = [*P.PYM, "jupyter", "lab", "--debug", "--no-browser", "--autoreload"]
     NODE_MODULES = ROOT / "node_modules"
     YARN_INTEGRITY = NODE_MODULES / ".yarn-integrity"
@@ -389,3 +390,4 @@ class L:
 
 class S:
     ROOT = P.HERE / "jupyterlab_server"
+    SETUP_FILES = [ROOT / "setup.py", ROOT / "setup.cfg"]
