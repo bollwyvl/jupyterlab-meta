@@ -25,13 +25,15 @@ DOIT_CONFIG = {
 def task_binder():
     """get ready to run on binder"""
     return dict(
-        task_dep=["build:dev:prod"],
+        file_dep=[L.DEV_STATIC_PACKAGE, L.DEV_STATIC_LICENSES],
         actions=[
-            [lambda: shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None],
-            [lambda: P.APP_DIR.mkdir(parents=True)],
-            [lambda: shutil.copytree(L.DEV_STATIC, P.APP_STATIC)],
-            ["echo", "ready to start lab!"],
+            lambda: [shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None, None][
+                -1
+            ],
+            lambda: [P.APP_DIR.mkdir(parents=True), None][-1],
+            lambda: [shutil.copytree(L.DEV_STATIC, P.APP_STATIC), None][-1],
         ],
+        targets=[P.APP_STATIC / "package.json"],
     )
 
 
@@ -100,32 +102,53 @@ def task_lint():
         name="prettier",
         file_dep=[L.YARN_INTEGRITY],
         actions=[
-            [*L.PRETTIER, *prettier, "--write", "--prose-wrap=always", "--print-width=88"]
+            [
+                *L.PRETTIER,
+                "--write",
+                "--prose-wrap=always",
+                "--print-width=88",
+                *prettier,
+            ]
         ],
     )
 
 
 def task_build():
     yield dict(
-        name="lib",
-        task_dep=["lint:js"],
-        file_dep=[L.YARN_INTEGRITY],
-        actions=[CmdAction([*P.YARN, "build"], cwd=L.ROOT, shell=False)],
-        # targets=[???]
+        name="builder",
+        file_dep=[
+            *(L.BUILDER / "src").rglob("*.ts"),
+            *L.BUILDER.glob("*.json"),
+            L.YARN_INTEGRITY,
+        ],
+        actions=[
+            CmdAction([*P.YARN, "build"], cwd=str(L.BUILDER), shell=False),
+        ],
+        targets=[L.BUILDER_TSBULDINFO],
     )
 
     yield dict(
-        name="core",
-        task_dep=["build:lib"],
-        actions=[CmdAction([*P.YARN, "build:core"], cwd=L.ROOT, shell=False)],
-        # targets=[???]
+        name="lib",
+        task_dep=["lint:js"],
+        file_dep=[L.YARN_INTEGRITY, *L.ALL_TS_SRC],
+        actions=[CmdAction([*P.YARN, "build:packages"], cwd=L.ROOT, shell=False)],
+        targets=[L.META_TSBUILDINFO],
     )
 
     yield dict(
         name="dev:prod",
-        task_dep=["build:core"],
-        actions=[CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False)],
-        # targets=[???]
+        doc="do a prod build of dev_mode for licenses",
+        file_dep=[
+            *L.DEV_MODE.glob("*.js*"),
+            L.BUILDER_TSBULDINFO,
+            L.META_TSBUILDINFO,
+        ],
+        task_dep=["build:lib"],
+        actions=[
+            CmdAction([*P.YARN], cwd=L.DEV_MODE, shell=False),
+            CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False),
+        ],
+        targets=[L.DEV_STATIC_PACKAGE, L.DEV_STATIC_LICENSES],
     )
 
 
@@ -197,19 +220,6 @@ def task_patched_prod():
     """
 
     tpl_json = P.APP_STATIC / "third-party-licenses.json"
-
-    yield dict(
-        name="builder:tsinfo",
-        task_dep=["build"],
-        file_dep=[
-            *L.BUILDER.glob("*.json"),
-            *(L.BUILDER / "src").rglob("*.ts"),
-        ],
-        actions=[
-            CmdAction([*P.YARN, "build"], cwd=str(L.BUILDER), shell=False),
-        ],
-        targets=[L.BUILDER_TSBULDINFO],
-    )
 
     yield dict(
         name="builder:tgz",
@@ -303,10 +313,16 @@ class L:
     PRETTIER = [*P.RUN_IN, "node", NODE_MODULES / ".bin/prettier"]
     PACKAGES = ROOT / "packages"
     BUILDER = ROOT / "builder"
+    META = PACKAGES / "metapackage"
+    META_TSBUILDINFO = META / "tsconfig.tsbuildinfo"
     BUILDER_TSBULDINFO = BUILDER / "tsconfig.tsbuildinfo"
     BUILDER_TGZ = BUILDER / "jupyterlab-builder-3.1.0-alpha.3.tgz"
     TESTUTILS = ROOT / "testutils"
     DEV_MODE = ROOT / "dev_mode"
+    DEV_STATIC = DEV_MODE / "static"
+    DEV_STATIC_PACKAGE = DEV_STATIC / "package.json"
+    DEV_STATIC_LICENSES = DEV_STATIC / "third-party-licenses.json"
+    ALL_TS_SRC = [*PACKAGES.rglob("*/src/**/*.ts*")]
     PACKAGES_JSON = [
         *PACKAGES.glob("*/package.json"),
         BUILDER / "package.json",
