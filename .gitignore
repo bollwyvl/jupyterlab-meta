@@ -3,3 +3,7 @@ __pycache__/
 .doit*
 .coverage
 .ipynb_checkpoints/
+build/
+Untitled*
+untitled*
+jupyterlab-licenses*
