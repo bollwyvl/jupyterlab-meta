@@ -9,10 +9,13 @@ import doit.tools
 from doit.tools import CmdAction
 
 os.environ.update(
-    NODE_OPTS="--max-old-space-size=4096",
-    PYTHONIOENCODING="utf-8",
-    PIP_DISABLE_PIP_VERSION_CHECK="1",
     MAMBA_NO_BANNER="1",
+    NODE_OPTS="--max-old-space-size=4096",
+    PIP_DISABLE_PIP_VERSION_CHECK="1",
+    PIP_IGNORE_INSTALLED="1",
+    PIP_NO_BUILD_ISOLATION="1",
+    PIP_NO_DEPENDENCIES="1",
+    PYTHONIOENCODING="utf-8",
 )
 
 DOIT_CONFIG = {
@@ -72,7 +75,7 @@ def task_setup():
             lambda: [P.PIP_CHECKED.unlink() if P.PIP_CHECKED.exists() else None, None][
                 -1
             ],
-            [*P.PIP, "uninstall", "jupyterlab", "jupyterlab_server"],
+            [*P.PIP, "uninstall", "-y", "jupyterlab", "jupyterlab_server"],
             CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False),
             CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False),
             [*P.PIP, "check"],
