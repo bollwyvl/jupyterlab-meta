@@ -24,6 +24,10 @@ DOIT_CONFIG = {
 
 def task_binder():
     """get ready to run on binder"""
+
+    def _copy_dev_mode(subdir):
+        shutil.copytree(L.DEV_MODE / subdir, P.APP_DIR / subdir)
+
     return dict(
         file_dep=[L.DEV_STATIC_PACKAGE, L.DEV_STATIC_LICENSES],
         actions=[
@@ -31,9 +35,13 @@ def task_binder():
                 -1
             ],
             lambda: [P.APP_DIR.mkdir(parents=True), None][-1],
-            lambda: [shutil.copytree(L.DEV_STATIC, P.APP_STATIC), None][-1],
+            *[(_copy_dev_mode, [p]) for p in ["static", "schemas", "themes"]],
         ],
-        targets=[P.APP_STATIC / "package.json"],
+        targets=[
+            P.APP_STATIC_PACKAGE,
+            P.APP_STATIC_INDEX,
+            P.APP_STATIC_LICENSES,
+        ],
     )
 
 
@@ -93,7 +101,10 @@ def task_lint():
     yield dict(
         name="py",
         file_dep=[P.ENV_HISTORY, *lint_py],
-        actions=[[*P.RUN_IN, "black", *lint_py], [*P.RUN_IN, "flake8", *lint_py]],
+        actions=[
+            [*P.RUN_IN, "black", "--quiet", *lint_py],
+            [*P.RUN_IN, "flake8", *lint_py],
+        ],
     )
 
     prettier = [P.HERE / "README.md"]
@@ -232,57 +243,18 @@ def task_clean_all():
     )
 
 
-def task_patched_prod():
-    """manually ensure the build in $PREFIX/share uses the up-to-date builder
-
-    this doesn't actually quite work yet because of release stuff
-    """
-
-    tpl_json = P.APP_STATIC / "third-party-licenses.json"
-
-    yield dict(
-        name="builder:tgz",
-        actions=[
-            CmdAction([*P.NPM, "pack", "."], cwd=str(L.BUILDER), shell=False),
-        ],
-        file_dep=[L.BUILDER_TSBULDINFO],
-        targets=[L.BUILDER_TGZ],
-    )
-
-    build_args = [*P.PYM, "jupyter", "lab", "build", "--debug", "--minimize=False"]
-
-    yield dict(
-        name="lab:clean",
-        file_dep=[L.BUILDER_TGZ],
-        actions=[
-            lambda: [shutil.rmtree(P.APP_DIR) if P.APP_DIR.exists() else None, None][
-                -1
-            ],
-            lambda: [subprocess.call(list(map(str, build_args))), None][-1],
-        ],
-        targets=[P.APP_STAGING / "package.json"],
-    )
-
-    yield dict(
-        name="lab:build",
-        actions=[
-            CmdAction([*P.YARN, "cache", "clean"], cwd=str(P.APP_STAGING), shell=False),
-            CmdAction(
-                [*P.YARN, "add", "--dev", L.BUILDER_TGZ],
-                cwd=str(P.APP_STAGING),
-                shell=False,
-            ),
-            CmdAction([*P.YARN, "build:prod"], cwd=str(P.APP_STAGING), shell=False),
-        ],
-        file_dep=[L.BUILDER_TGZ, P.APP_STAGING / "package.json"],
-        targets=[tpl_json],
-    )
+def task_lab():
+    """start lab with dev_mode prod assets copied into $PREFIX/share"""
 
     yield dict(
         name="lab:run",
         uptodate=[lambda: False],
-        file_dep=[tpl_json],
-        actions=[_make_lab(["--ServerApp.base_url", "/patched-prod/"])],
+        file_dep=[
+            P.APP_STATIC_PACKAGE,
+            P.APP_STATIC_INDEX,
+            P.APP_STATIC_LICENSES,
+        ],
+        actions=[_make_lab(["--ServerApp.base_url", "/prod/"])],
     )
 
 
@@ -313,6 +285,9 @@ class P:
     APP_DIR = ENV / "share/jupyter/lab"
     APP_STAGING = APP_DIR / "staging"
     APP_STATIC = APP_DIR / "static"
+    APP_STATIC_PACKAGE = APP_STATIC / "package.json"
+    APP_STATIC_INDEX = APP_STATIC / "index.html"
+    APP_STATIC_LICENSES = APP_STATIC / "third-party-licenses.json"
     if BINDER:
         RUN_IN = []
     else:
@@ -320,7 +295,7 @@ class P:
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
-    YARN = [*RUN_IN, "yarn", "--silent"]
+    YARN = [*RUN_IN, "yarn"]
     NPM = [*RUN_IN, "npm"]
 
 
