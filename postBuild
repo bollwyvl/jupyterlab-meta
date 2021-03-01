@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
+source activate $NB_PYTHON_PREFIX
+
+set -eux
 export LAB_LICENSES_BINDER=1
 doit list --all --status
-doit binder
+doit binder | tee doit.binder.log
 doit list --all --status

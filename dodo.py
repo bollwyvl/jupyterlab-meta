@@ -72,6 +72,7 @@ def task_setup():
             lambda: [P.PIP_CHECKED.unlink() if P.PIP_CHECKED.exists() else None, None][
                 -1
             ],
+            [*P.PIP, "uninstall", "jupyterlab", "jupyterlab_server"],
             CmdAction(P.SETUP_E, cwd=S.ROOT, shell=False),
             CmdAction(P.SETUP_E, cwd=L.ROOT, shell=False),
             [*P.PIP, "check"],
