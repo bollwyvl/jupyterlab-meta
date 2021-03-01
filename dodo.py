@@ -113,24 +113,43 @@ def task_lint():
     )
 
 
-def task_build():
+def task_integrity():
     yield dict(
-        name="builder",
-        file_dep=[
-            *(L.BUILDER / "src").rglob("*.ts"),
-            *L.BUILDER.glob("*.json"),
-            L.YARN_INTEGRITY,
-        ],
-        actions=[
-            CmdAction([*P.YARN, "build"], cwd=str(L.BUILDER), shell=False),
-        ],
-        targets=[L.BUILDER_TSBULDINFO],
+        name="buildutils",
+        file_dep=L.ALL_BUILDUTILS,
+        actions=[CmdAction([*P.YARN, "postinstall"], cwd=L.ROOT, shell=False)],
+        targets=[L.BUILDUTILS_TSBUILDINFO, L.BUILDER_TSBULDINFO],
     )
 
     yield dict(
+        name="repo",
+        file_dep=[
+            L.BUILDUTILS_TSBUILDINFO,
+            L.BUILDER_TSBULDINFO,
+            *L.ALL_TS_SRC,
+            *L.PACKAGES_JSON,
+        ],
+        actions=[
+            (doit.tools.create_folder, [L.BUILD]),
+            lambda: [
+                L.INTEGRITY_OK.unlink() if L.INTEGRITY_OK.exists() else None,
+                None,
+            ][-1],
+            CmdAction(
+                [*P.YARN, "node", "buildutils/lib/ensure-repo.js"],
+                cwd=L.ROOT,
+                shell=False,
+            ),
+            L.INTEGRITY_OK.touch,
+        ],
+        targets=[L.INTEGRITY_OK],
+    )
+
+
+def task_build():
+    yield dict(
         name="lib",
-        task_dep=["lint:js"],
-        file_dep=[L.YARN_INTEGRITY, *L.ALL_TS_SRC],
+        file_dep=[L.INTEGRITY_OK, L.YARN_INTEGRITY, *L.ALL_TS_SRC],
         actions=[CmdAction([*P.YARN, "build:packages"], cwd=L.ROOT, shell=False)],
         targets=[L.META_TSBUILDINFO],
     )
@@ -140,10 +159,10 @@ def task_build():
         doc="do a prod build of dev_mode for licenses",
         file_dep=[
             *L.DEV_MODE.glob("*.js*"),
+            L.BUILDUTILS_TSBUILDINFO,
             L.BUILDER_TSBULDINFO,
             L.META_TSBUILDINFO,
         ],
-        task_dep=["build:lib"],
         actions=[
             CmdAction([*P.YARN], cwd=L.DEV_MODE, shell=False),
             CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False),
@@ -301,7 +320,7 @@ class P:
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
-    YARN = [*RUN_IN, "yarn"]
+    YARN = [*RUN_IN, "yarn", "--silent"]
     NPM = [*RUN_IN, "npm"]
 
 
@@ -312,11 +331,27 @@ class L:
     YARN_INTEGRITY = NODE_MODULES / ".yarn-integrity"
     PRETTIER = [*P.RUN_IN, "node", NODE_MODULES / ".bin/prettier"]
     PACKAGES = ROOT / "packages"
+    BUILD = ROOT / "build"
     BUILDER = ROOT / "builder"
+    BUILDUTILS = ROOT / "buildutils"
+    ALL_BUILDUTILS = [
+        p
+        for p in [
+            *(BUILDER / "src").rglob("*.ts"),
+            *BUILDER.glob("*.json"),
+            *BUILDUTILS.glob("*.json"),
+            *BUILDUTILS.rglob("src/**/*"),
+            *BUILDUTILS.rglob("template/**/*"),
+            YARN_INTEGRITY,
+        ]
+        if not p.is_dir()
+    ]
+    BUILDUTILS_TSBUILDINFO = BUILDUTILS / "tsconfig.tsbuildinfo"
     META = PACKAGES / "metapackage"
     META_TSBUILDINFO = META / "tsconfig.tsbuildinfo"
     BUILDER_TSBULDINFO = BUILDER / "tsconfig.tsbuildinfo"
     BUILDER_TGZ = BUILDER / "jupyterlab-builder-3.1.0-alpha.3.tgz"
+    INTEGRITY_OK = BUILD / "repo.integrity.log"
     TESTUTILS = ROOT / "testutils"
     DEV_MODE = ROOT / "dev_mode"
     DEV_STATIC = DEV_MODE / "static"
