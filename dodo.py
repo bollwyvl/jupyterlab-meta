@@ -68,13 +68,13 @@ def task_setup():
     yield dict(
         name="yarn",
         file_dep=[P.ENV_HISTORY, *L.PACKAGES_JSON],
-        actions=[CmdAction([*P.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*L.YARN, "--ignore-optional"], cwd=L.ROOT, shell=False)],
         targets=[L.YARN_INTEGRITY],
     )
 
     yield dict(
         name="pip",
-        file_dep=[P.ENV_HISTORY, *L.SETUP_FILES, *S.SETUP_FILES],
+        file_dep=[P.ENV_HISTORY, *L.SETUP_FILES, *S.SETUP_FILES, L.YARN_INTEGRITY],
         actions=[
             lambda: [P.PIP_CHECKED.unlink() if P.PIP_CHECKED.exists() else None, None][
                 -1
@@ -126,7 +126,7 @@ def task_lint():
     yield dict(
         name="js",
         file_dep=[L.YARN_INTEGRITY, P.PIP_CHECKED],
-        actions=[CmdAction([*P.YARN, "lint"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*L.YARN, "lint"], cwd=L.ROOT, shell=False)],
         # targets=[???]
     )
 
@@ -146,11 +146,11 @@ def task_lint():
         ],
     )
 
-    prettier = [P.HERE / "README.md"]
+    prettier = [P.HERE / "README.md", P.HERE / "environment.yml"]
 
     yield dict(
         name="prettier",
-        file_dep=[L.YARN_INTEGRITY],
+        file_dep=[L.YARN_INTEGRITY, *prettier],
         actions=[
             [
                 *L.PRETTIER,
@@ -167,7 +167,7 @@ def task_integrity():
     yield dict(
         name="buildutils",
         file_dep=L.ALL_BUILDUTILS,
-        actions=[CmdAction([*P.YARN, "postinstall"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*L.YARN, "postinstall"], cwd=L.ROOT, shell=False)],
         targets=[L.BUILDUTILS_TSBUILDINFO, L.BUILDER_TSBULDINFO],
     )
 
@@ -186,7 +186,7 @@ def task_integrity():
                 None,
             ][-1],
             CmdAction(
-                [*P.YARN, "node", "buildutils/lib/ensure-repo.js"],
+                [*L.YARN, "node", "buildutils/lib/ensure-repo.js"],
                 cwd=L.ROOT,
                 shell=False,
             ),
@@ -200,7 +200,7 @@ def task_build():
     yield dict(
         name="lib",
         file_dep=[L.INTEGRITY_OK, L.YARN_INTEGRITY, *L.ALL_TS_SRC, P.PIP_CHECKED],
-        actions=[CmdAction([*P.YARN, "build:packages"], cwd=L.ROOT, shell=False)],
+        actions=[CmdAction([*L.YARN, "build:packages"], cwd=L.ROOT, shell=False)],
         targets=[L.META_TSBUILDINFO],
     )
 
@@ -214,8 +214,8 @@ def task_build():
             L.META_TSBUILDINFO,
         ],
         actions=[
-            CmdAction([*P.YARN], cwd=L.DEV_MODE, shell=False),
-            CmdAction([*P.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False),
+            CmdAction([*L.YARN], cwd=L.DEV_MODE, shell=False),
+            CmdAction([*L.YARN, "build:prod"], cwd=L.DEV_MODE, shell=False),
         ],
         targets=[L.DEV_STATIC_PACKAGE, L.DEV_STATIC_LICENSES],
     )
@@ -343,7 +343,6 @@ class P:
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
     SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
-    YARN = [*RUN_IN, "yarn"]
     NPM = [*RUN_IN, "npm"]
     PIP_CHECKED = BUILD / "pip.checked"
     SERVER_EXTENDED = BUILD / "server.extended"
@@ -351,6 +350,7 @@ class P:
 
 class L:
     ROOT = P.HERE / "jupyterlab"
+    YARN = [*P.RUN_IN, "node", ROOT / "jupyterlab/staging/yarn.js"]
     SETUP_FILES = [ROOT / "setup.py", ROOT / "pyproject.toml"]
     BASE_ARGS = [*P.PYM, "jupyter", "lab", "--debug", "--no-browser", "--autoreload"]
     NODE_MODULES = ROOT / "node_modules"
