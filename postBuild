@@ -4,5 +4,5 @@ source activate $NB_PYTHON_PREFIX
 set -eux
 export LAB_LICENSES_BINDER=1
 doit list --all --status
-doit binder | tee doit.binder.log
+doit -n4 binder | tee doit.binder.log
 doit list --all --status
