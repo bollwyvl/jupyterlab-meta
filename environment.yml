@@ -12,6 +12,7 @@ dependencies:
   - jupyter-packaging
   - wheel
   - packaging
+  - setuptools
   # lab deps
   - tornado >=6.1
   - jinja2 >=2.10
@@ -24,12 +25,14 @@ dependencies:
   - jsonschema >=3.0.1
   - jupyter_server >=1.4,<2
   # test
+  - openapi-core >=0.13.8,<0.14
   - pytest
   - pytest-check-links
-  - pytest-cov
-  - requests-cache
-  - pytest-tornasync
   - pytest-console-scripts
+  - pytest-cov
+  - pytest-tornasync
+  - requests-cache
+  - ruamel.yaml
   # TODO: pr for p-c-s
   - pytest-runner
   - strict-rfc3339

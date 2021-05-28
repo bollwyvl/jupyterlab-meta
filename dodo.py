@@ -342,7 +342,16 @@ class P:
     APP_STATIC_LICENSES = APP_STATIC / "third-party-licenses.json"
     PYM = [*RUN_IN, "python", "-m"]
     PIP = [*PYM, "pip"]
-    SETUP_E = [*PIP, "install", "-e", ".", "-vvv", "--no-deps", "--ignore-installed"]
+    SETUP_E = [
+        *PIP,
+        "install",
+        "-e",
+        ".",
+        "-vvv",
+        "--no-deps",
+        "--ignore-installed",
+        "--no-build-isolation",
+    ]
     NPM = [*RUN_IN, "npm"]
     PIP_CHECKED = BUILD / "pip.checked"
     SERVER_EXTENDED = BUILD / "server.extended"
