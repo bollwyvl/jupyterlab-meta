@@ -224,7 +224,7 @@ def task_build():
 def task_test():
     yield dict(
         name="server",
-        file_dep=[P.PIP_CHECKED],
+        file_dep=[P.PIP_CHECKED, S.OPEN_API, *S.SRC_PY],
         actions=[
             [
                 *P.PYM,
@@ -404,3 +404,6 @@ class L:
 class S:
     ROOT = P.HERE / "jupyterlab_server"
     SETUP_FILES = [ROOT / "setup.py", ROOT / "setup.cfg"]
+    SRC = ROOT / "jupyterlab_server"
+    SRC_PY = SRC.rglob("*.py")
+    OPEN_API = SRC / "rest-api.yml"
